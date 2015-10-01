@@ -67,6 +67,9 @@ class gen : public edm::EDAnalyzer {
       virtual void analyze(const edm::Event&, const edm::EventSetup&) override;
       virtual void endJob() override;
       TH1F *histWpt;
+      TH1F *histZchild;
+      TH1F *histtaudecaymode;
+			
       //virtual void beginRun(edm::Run const&, edm::EventSetup const&) override;
       //virtual void endRun(edm::Run const&, edm::EventSetup const&) override;
       //virtual void beginLuminosityBlock(edm::LuminosityBlock const&, edm::EventSetup const&) override;
@@ -92,6 +95,8 @@ gen::gen(const edm::ParameterSet& iConfig)
    //now do what ever initialization is needed
    Service<TFileService> fs;
    histWpt=fs->make<TH1F>("Wpt_gen","W+ pt",10,0,10);
+   histZchild=fs->make<TH1F>("Z_tau_child","Z_tau_gen",40,-20,20);
+   histtaudecaymode=fs->make<TH1F>("tau_decay_mode","tau_decay_mode",5,1,5);
 }
 
 
@@ -119,7 +124,9 @@ gen::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
    for(size_t i = 0; i < genParticles->size(); ++ i) //starting from tau analysis_gen 
 	{
 		  int final=1;
+			int decay_mode_tau=0; //1 for 3mu,2 for 1mu 3 for 1 electron 4 for hardronic for others
 			int count_muon=0;
+			int count_electron=0;
 			const GenParticle & p = (*genParticles)[i];  //geting the partilce as p
 	   			if(p.pdgId()==15 || p.pdgId()== -15 ) //tau is 15
 					{
@@ -129,55 +136,68 @@ gen::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
 							{
 								const Candidate * mon=p.mother(j);
 								int monId=mon->pdgId();
-								if (monId != 23 && monId!=p.pdgId())
+								if (monId != 23 && monId!=p.pdgId()) //check if tau from Z
 								{
 									final=0;
 									break;
 								}
 							}
-							for (int j=0;j<k;++ j)
+							for (int j=0;j<k;++ j) //check whether they duplicate another tau
 							{
 								const Candidate * d = p.daughter(j);
        					int dauId = d->pdgId();
 								if (dauId==p.pdgId())
 								{
 									final=0;
+									break;
+								}
+								if (dauId==13 || dauId==-13)
+								{
+									count_muon++;
+								}
+								
+								if (dauId==11 || dauId==-11)
+								{
+									count_electron++;
 								}
 							}
 							if (final == 1)
 							{
 								histZchild->Fill(p.pdgId());
+								if (count_muon == 3)
+								{
+									decay_mode_tau=1;
+								} 		
+								if (count_muon == 1)
+								{
+									decay_mode_tau=2;
+								} 		
+								if (count_electron == 1)
+								{
+									decay_mode_tau=3;
+								} 		
+								if (count_muon == 0 && count_electron==0)
+								{
+									decay_mode_tau=4;
+								} 		
+								histtaudecaymode->Fill(decay_mode_tau);
 							}
-							for(int j = 0; j < k; ++ j) 
-								{
-       					const Candidate * d = p.daughter(j);
-       					int dauId = d->pdgId();
-								if (dauId != 13 && dauId != -13)
-								{
-									final=0;
-									break;
-								}
-								if (dauId == 13 || dauId == -13)
-								{
-									count_muon++;
-								}
-								}
 							
 							if (p.pdgId()==-15 && count_muon==3)
 							{
 								positive=0;
 							}	
-						histWpt->Fill(k);	
-            if (final==1 && count_muon==3)
+            
+						if (final==1 && count_muon==3)
 							{
 						//		int k = p.numberOfDaughters();
-								histtaupt->Fill(p.pt());
-								histtaueta->Fill(p.eta());			
-								histtaumass->Fill(p.mass());
-								} //end of if (final==1 && count_muon==3)
+						//		histtaupt->Fill(p.pt());
+						//		histtaueta->Fill(p.eta());			
+						//		histtaumass->Fill(p.mass());
+							} //end of if (final==1 && count_muon==3)
 				}	//end of if if pdg.ID
 	}//end of Tau Analysis.
-	if (positive == 1) 
+if (positive == 1) 
 {
 NoGenMuon=0;
 for(size_t i = 0; i < genParticles->size(); ++ i) //starting from muon analysis_gen for muon
